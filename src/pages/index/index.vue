@@ -43,15 +43,10 @@
 </template>
 
 <script>
-import { createRunner } from '../../tester/runner.js'
-import { register as registerScan } from '../../tester/cases/scan.js'
-import { register as registerDict } from '../../tester/cases/dict.js'
-import { register as registerVoice } from '../../tester/cases/voice.js'
-import { register as registerMonkey } from '../../tester/cases/monkey.js'
 import { APP_VERSION } from '../../lib/appversion.js'
 import { log } from '../../services/platform.js'
-import { goHome, stopGrafana } from '../../tester/actions.js'
-import { requestStop } from '../../tester/cases/monkey.js'
+import { sleep } from '../../services/platform.js'
+import { ensureScripts, startTest, stopTest, monkeyRunning, grafanaRunning } from '../../tester/actions.js'
 
 export default {
     name: 'index',
@@ -62,11 +57,13 @@ export default {
             running: false,
             summary: null,
             stopFlag: false,
+            currentMode: '',
             menuItems: [
-                { key: 'scan', label: '扫描/相机' },
-                { key: 'dict', label: '点查' },
-                { key: 'voice', label: '语音问答' },
-                { key: 'monkey', label: '随机稳定性' }
+                { key: 'monkey', label: '随机稳定性', mode: '' },
+                { key: 'dict', label: '点查', mode: 'dict' },
+                { key: 'photo', label: '拍照', mode: 'rand' },
+                { key: 'scan', label: '扫描', mode: 'ocr' },
+                { key: 'voice', label: '语音问答', mode: 'xiaop' }
             ]
         }
     },
@@ -101,34 +98,54 @@ export default {
             this.stopFlag = false
             this.results = []
             this.summary = null
+            this.currentMode = m.mode || ''
 
-            const tr = createRunner()
-            if (m.key === 'scan') registerScan(tr)
-            else if (m.key === 'dict') registerDict(tr)
-            else if (m.key === 'voice') registerVoice(tr)
-            else if (m.key === 'monkey') registerMonkey(tr, { rounds: 3, opsPerRound: 8 })
-
-            const out = await tr.run(
-                (r, done, total) => {
-                    this.results = this.results.slice()
-                    this.results.push(r)
-                },
-                (name, done, total) => {
-                    log('case ' + name)
-                }
-            )
-
-            this.summary = { pass: out.pass, fail: out.fail, total: out.total }
-            log('lab 完成 pass=' + out.pass + ' fail=' + out.fail)
-            goHome()
+            await this.runScriptTest(m)
             this.running = false
         },
-        stopAll() {
+        // 通用：落地脚本 → 启动 monkey.sh(模式) + grafana.sh → 持续跑直到停止
+        async runScriptTest(m) {
+            const label = m.label
+            const mode = m.mode || ''
+
+            const landed = await ensureScripts()
+            this.results.push({ name: '落地测试脚本', ok: landed, error: landed ? '' : '脚本落地失败', ms: 0 })
+            if (!landed) {
+                this.summary = { pass: 0, fail: 1, total: 1 }
+                return
+            }
+
+            startTest(mode)
+            await sleep(1500)
+            const monkey = await monkeyRunning()
+            const grafana = await grafanaRunning()
+            this.results.push({ name: '启动 monkey.sh（' + label + '）', ok: monkey, error: '', ms: 0 })
+            this.results.push({ name: '启动 grafana.sh', ok: grafana, error: '', ms: 0 })
+
+            log(label + '测试运行中，等待停止')
+            // 持续跑，直到 stopFlag 被「停止」按钮设置
+            while (!this.stopFlag) {
+                await sleep(1000)
+            }
+
+            // 停止两个脚本
+            stopTest()
+            await sleep(1000)
+            const mStopped = !(await monkeyRunning())
+            const gStopped = !(await grafanaRunning())
+            this.results.push({ name: '停止 monkey.sh', ok: mStopped, error: '', ms: 0 })
+            this.results.push({ name: '停止 grafana.sh', ok: gStopped, error: '', ms: 0 })
+
+            const pass = this.results.filter((r) => r.ok).length
+            const fail = this.results.filter((r) => !r.ok).length
+            this.summary = { pass: pass, fail: fail, total: this.results.length }
+            log(label + '测试已停止')
+        },
+        async stopAll() {
             this.stopFlag = true
-            // 通知 monkey 停止循环，并同步停止 grafana.sh
-            requestStop()
-            stopGrafana()
-            log('用户请求停止，已停止 monkey 和 grafana')
+            // 同步停止 monkey.sh 和 grafana.sh（双保险）
+            stopTest()
+            log('用户请求停止测试')
         },
         clearResults() {
             this.results = []

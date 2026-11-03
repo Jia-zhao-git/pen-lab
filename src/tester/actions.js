@@ -1,134 +1,95 @@
-// 整机操作封装：通过 execShell 驱动系统能力。
+// 整机测试控制层：通过 execShell 启停设备端 shell 脚本（monkey.sh / grafana.sh）。
 //
 // 核心机制：小程序运行在 QuickJS 沙箱里，但 platform.js 的 execShell
 // 通过 global.Global.execShell 能执行任意系统命令（参考项目用它跑过 curl/pkill）。
-// 所以整机测试 App 靠这几条命令驱动：
-//   - miniapp_cli start <appid>  启动任意系统应用
-//   - send_event <key> <action>  注入按键/触摸
-//   - miniapp_cli captureFB      截 framebuffer
-//   - miniapp_cli memoryApp      查内存
+// 整机测试（随机点击/扫描/拍照等）由设备端 shell 脚本承担，App 只做控制面板：
+//   - 点「开始」= 同时启动 monkey.sh + grafana.sh（后台 setsid）
+//   - 点「停止」= 同时 pkill 两个脚本
 //
-// 注意（真机事实）：
-//   - execShell 无回显、异步返回 boolean，命令产物要重定向到文件再读
-//   - execShell 是同步阻塞的（参考项目 api.js 实测），长命令会卡 UI，要控制命令时长
+// 为什么不用 App 直接注入 send_event：
+//   参考项目 api.js 实测，execShell 是同步阻塞的，且 App 在前台注入触摸会点到自己，
+//   容易形成死锁、拖垮整个 miniapp 运行时。shell 脚本独立进程，稳定得多。
+//
+// 脚本内容内嵌在 App 里（grafana-script.js / monkey-script.js），
+// 首次启动时自动落地到设备，不需要每次手动 push。
 
 import { execShell, readText, writeText, ensureAppDir, joinPath, sleep, shq } from '../services/platform.js'
+import { GRAFANA_SCRIPT } from './grafana-script.js'
+import { MONKEY_SCRIPT } from './monkey-script.js'
 
-// 系统应用 appid 映射（从 presetpkgs manifest.json 提取）
-export const SYSTEM_APPS = {
-  dict: '8080252464522508',      // 有道词典（点查）
-  ocrScan: '8001733883553973',   // 提笔即扫OCR（扫描）
-  aiPhoto: '8001699004677776',   // AI拍照
-  recorder: '8001670668055425',  // 录音服务
-  aiTeacher: '8001707294117702', // 小P老师（语音问答）
-  inputMethod: '8001666679481944', // 有道输入法
-  desktop: '8080222437664451',   // 桌面
-  settings: '8080272425914438'   // 设置
-}
+// 脚本落地路径
+const SCRIPTS = [
+  { path: '/userdisk/grafana.sh', content: GRAFANA_SCRIPT, tag: 'grafana.sh' },
+  { path: '/userdisk/monkey.sh', content: MONKEY_SCRIPT, tag: 'monkey.sh' }
+]
 
-// ---- 按键 ----
-// send_event 支持的按键：camera/asr/menu/touch/screen_off/power
-export function sendKey(key, action) {
-  const a = action || 'press'
-  execShell('send_event ' + shq(key) + ' ' + shq(a) + ' 2>/dev/null; true')
-}
-
-export function pressKey(key) {
-  sendKey(key, 'press')
-  sendKey(key, 'release')
-}
-
-export function goHome() {
-  pressKey('asr') // 语音键 = 返回桌面
-}
-
-export function scan() {
-  pressKey('camera') // 相机键 = 扫描
-}
-
-export function menu() {
-  pressKey('menu')
-}
-
-export function power() {
-  pressKey('power')
-}
-
-// ---- 触摸 ----
-// 触摸坐标：X 0-279, Y 0-935（竖屏，origin 左上）
-export function touch(x, y) {
-  execShell('send_event touch press ' + x + ' ' + y + ' 2>/dev/null; sleep 0.1; send_event touch release 2>/dev/null; true')
-}
-
-export function swipe(x1, y1, x2, y2, steps) {
-  const n = steps || 8
-  execShell('send_event touch press ' + x1 + ' ' + y1 + ' 2>/dev/null; true')
-  for (let i = 1; i <= n; i++) {
-    const cx = Math.round(x1 + (x2 - x1) * i / n)
-    const cy = Math.round(y1 + (y2 - y1) * i / n)
-    execShell('send_event touch slip ' + cx + ' ' + cy + ' 2>/dev/null; true')
+// 确保脚本已落地（不存在则从内嵌内容写出来），返回是否全部落地成功
+export async function ensureScripts() {
+  let allOk = true
+  for (const s of SCRIPTS) {
+    try {
+      const existing = await readText(s.path, 1)
+      if (existing && existing.length > 100) continue
+      writeText(s.path, s.content)
+      const verify = await readText(s.path, 1)
+      if (!verify || verify.length <= 100) allOk = false
+    } catch (e) {
+      allOk = false
+    }
   }
-  execShell('send_event touch release ' + x2 + ' ' + y2 + ' 2>/dev/null; true')
+  return allOk
 }
 
-// ---- 应用启动 ----
-export function startApp(appid) {
-  execShell('miniapp_cli start ' + appid + ' 2>/dev/null; true')
+// 后台启动一个 shell 脚本（可选参数），并把它的 PID 记录到 pidfile。
+// 参考项目实测：execShell 同步阻塞，后台命令必须用 setsid + sh -c 包裹 +
+// </dev/null 重定向 stdin，否则 execShell 会一直等命令结束，主线程冻结。
+// 为什么用 pidfile 而不是 pkill：pkill -f 会匹配到「命令行含关键词的自己」
+// （执行 pkill 的 shell 命令行里也有脚本名），导致 pkill 连自己一起杀、命令中断，
+// 目标脚本反而没被杀干净。用 pidfile + kill 按 PID 精确杀，彻底避免自匹配。
+function launchDetached(scriptPath, args, pidFile) {
+  // $$ = 这个 sh -c 的 PID；exec 用脚本替换当前进程，PID 不变，所以 pidfile 记录的
+  // 就是脚本进程的 PID。
+  const cmd = 'echo $$ > ' + shq(pidFile) + '; exec sh ' + shq(scriptPath) + (args ? ' ' + shq(args) : '')
+  execShell('setsid sh -c ' + shq(cmd) + ' >/dev/null 2>&1 </dev/null &')
 }
 
-// ---- 截图 ----
-export function screenshot(name) {
-  const path = joinPath(ensureAppDir('shots'), name + '.png')
-  execShell('miniapp_cli captureFB ' + shq(path) + ' 2>/dev/null; true')
-  return path
+// 按 pidfile 精确杀脚本进程
+function killByPidFile(pidFile) {
+  execShell('kill -9 $(cat ' + shq(pidFile) + ') 2>/dev/null; rm -f ' + shq(pidFile) + '; true')
 }
 
-// ---- 内存 ----
-export async function memoryInfo() {
-  const out = joinPath(ensureAppDir(), 'mem.txt')
-  execShell('miniapp_cli memoryApp > ' + shq(out) + ' 2>/dev/null; true')
+const MONKEY_PID = '/userdisk/monkey.pid'
+const GRAFANA_PID = '/userdisk/grafana.pid'
+
+// 启动测试：同时启动 monkey.sh（指定模式）+ grafana.sh
+// mode: ''(混合) | dict | xiaop | ocr | rand | app | 07ocr
+export function startTest(mode) {
+  // 先清理残留实例（用 pidfile 精确杀）
+  killByPidFile(MONKEY_PID)
+  killByPidFile(GRAFANA_PID)
+  launchDetached('/userdisk/monkey.sh', mode || '', MONKEY_PID)
+  launchDetached('/userdisk/grafana.sh', '', GRAFANA_PID)
+}
+
+// 停止测试：同时停止 monkey.sh + grafana.sh
+export function stopTest() {
+  killByPidFile(MONKEY_PID)
+  killByPidFile(GRAFANA_PID)
+}
+
+// 判断某个脚本是否在运行（读 pidfile，检查 PID 是否还活着）
+async function scriptRunning(pidFile) {
+  const out = joinPath(ensureAppDir(), 'alive.txt')
+  execShell('kill -0 $(cat ' + shq(pidFile) + ') 2>/dev/null && echo alive > ' + shq(out) + ' || rm -f ' + shq(out) + '; true')
   await sleep(300)
   const txt = await readText(out, 1)
-  if (!txt) return null
-  // 提取 fordblks（空闲块）
-  const m = String(txt).match(/fordblks=(\d+)/)
-  return m ? { fordblks: parseInt(m[1], 10), raw: String(txt) } : { raw: String(txt) }
+  return !!(txt && String(txt).indexOf('alive') >= 0)
 }
 
-// ---- 崩溃计数 ----
-export async function crashCount() {
-  const txt = await readText('/tmp/app_crash_count', 1)
-  return txt ? parseInt(String(txt).trim(), 10) || 0 : 0
+export async function monkeyRunning() {
+  return await scriptRunning('/userdisk/monkey.pid')
 }
 
-// 通用：执行一条命令并把 stdout 重定向到文件读回
-export async function runCmd(cmd) {
-  const out = joinPath(ensureAppDir(), 'cmdout.txt')
-  execShell(cmd + ' > ' + shq(out) + ' 2>&1; true')
-  await sleep(200)
-  return await readText(out, 1)
-}
-
-// ---- grafana.sh 启停（稳定性测试时同步记录设备状态）----
-// grafana.sh 是独立后台进程，每 3 秒采集电池/温度/内存/CPU/进程信息。
-// 启动用 setsid + & 后台（脱离会话，不阻塞 execShell）。
-const GRAFANA_PATH = '/userdisk/grafana.sh'
-
-export function startGrafana() {
-  // 先确保没有残留实例，再启动
-  execShell('pkill -f grafana.sh 2>/dev/null; sleep 0.3; true')
-  execShell('setsid sh ' + shq(GRAFANA_PATH) + ' > /dev/null 2>&1 & true')
-}
-
-export function stopGrafana() {
-  execShell('pkill -f grafana.sh 2>/dev/null; true')
-}
-
-// grafana 是否在运行（通过 pgrep 判断，结果重定向到文件读回）
 export async function grafanaRunning() {
-  const out = joinPath(ensureAppDir(), 'grafana_pid.txt')
-  execShell('pgrep -f grafana.sh > ' + shq(out) + ' 2>/dev/null; true')
-  await sleep(200)
-  const txt = await readText(out, 1)
-  return !!(txt && String(txt).trim())
+  return await scriptRunning('/userdisk/grafana.pid')
 }

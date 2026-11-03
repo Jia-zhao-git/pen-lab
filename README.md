@@ -6,38 +6,37 @@
 
 ## 核心机制
 
-小程序通过 `execShell`（`global.Global.execShell`）执行系统命令，驱动整机：
+App 只做**控制面板**：点「开始」同时后台启动两个设备端 shell 脚本，点「停止」同时停止。
 
-- `miniapp_cli start <appid>` — 启动任意系统应用
-- `send_event <key> <action>` — 注入按键/触摸
-- `miniapp_cli captureFB` — 截 framebuffer
-- `miniapp_cli memoryApp` — 查内存
+- `monkey.sh` — 整机随机测试（随机点击/滑动/扫描/拍照/语音/下拉菜单）
+- `grafana.sh` — 同步采集设备状态（电池/温度/内存/CPU/进程）
 
-## 测试项
+为什么不用 App 直接注入触摸：参考项目实测 `execShell` 同步阻塞，且 App 在前台注入触摸会点到自己，容易拖垮整个 miniapp 运行时。独立 shell 脚本进程稳定得多。
 
-1. **扫描/相机** — 启动提笔即扫OCR、AI拍照，触发相机键，验证不崩溃
-2. **点查** — 启动有道词典，触发扫描查词，反复进出验证稳定性
-3. **语音问答** — 启动小P老师、录音服务，触发语音键
-4. **随机稳定性(monkey)** — 随机触摸/滑动/按键/启动应用，监控崩溃计数和内存
+两个脚本内容**内嵌在 App 里**，首次运行自动落地到设备，无需手动 push。
 
-## 系统应用 appid 映射
+## 测试项（对应 monkey.sh 子模式）
 
-| 应用 | appid |
-|------|-------|
-| 有道词典 | 8080252464522508 |
-| 提笔即扫OCR | 8001733883553973 |
-| AI拍照 | 8001699004677776 |
-| 录音服务 | 8001670668055425 |
-| 小P老师 | 8001707294117702 |
-| 设置 | 8080272425914438 |
+1. **随机稳定性** → `monkey.sh`（默认混合：DICT 30% + 小P 30% + APP 20% + 综合 20%）
+2. **点查** → `monkey.sh dict`（循环查词）
+3. **拍照** → `monkey.sh rand`（综合：AI拍照/OCR/语音/下拉菜单）
+4. **扫描** → `monkey.sh ocr`（OCR 循环扫描）
+5. **语音问答** → `monkey.sh xiaop`（小P老师）
 
-完整列表见 `scripts/list-apps.sh`。
+每个测试项都同步启动 grafana.sh 采集设备状态。
+
+## 启停机制
+
+- 启动：`echo $$ > pidfile; exec sh 脚本`，PID 记录到 `/userdisk/monkey.pid`、`/userdisk/grafana.pid`
+- 停止：`kill -9 $(cat pidfile)` 按 PID 精确杀
+
+用 pidfile 而不是 pkill，是因为 `pkill -f` 会匹配到「命令行含关键词的自己」，导致 pkill 自杀、脚本没被杀干净。
 
 ## 构建
 
 ```bash
 npm install
-npm run build:prod
+npm run build
 adb push 8000000000182402.<版本>.amr /userdisk/Favorite/
 adb shell "miniapp_cli install /userdisk/Favorite/8000000000182402.<版本>.amr"
 adb shell "miniapp_cli start 8000000000182402"
@@ -48,22 +47,19 @@ adb shell "miniapp_cli start 8000000000182402"
 ```
 src/
   tester/
-    runner.js        测试运行器
-    actions.js       整机操作封装（execShell 驱动）
-    cases/
-      scan.js        扫描/相机测试
-      dict.js        点查测试
-      voice.js       语音问答测试
-      monkey.js      随机稳定性测试
-  pages/index/       测试菜单 + 结果 UI
+    actions.js          整机控制层（脚本启停、pidfile 管理）
+    grafana-script.js   内嵌的 grafana.sh（生成，勿手改）
+    monkey-script.js    内嵌的 monkey.sh（生成，勿手改）
+  pages/index/          测试菜单 + 结果 UI
   services/platform.js  execShell 等平台层
+scripts/
+  list-apps.sh          列出设备所有系统应用 appid
 ```
 
-## 关键限制
+## 结果位置
 
-- `execShell` 同步阻塞：长命令会卡 UI，测试运行中界面可能短暂无响应属正常
-- `execShell` 无回显：命令产物需重定向到文件再读（见 actions.js 的 runCmd/memoryInfo）
-- 触摸坐标：X 0–279, Y 0–935（竖屏 origin 左上）
+- grafana 监控日志：`/userdisk/testlog/grafana/`
+- monkey 测试总结：`/userdisk/testlog/test_summary_<SN>.txt`
 
 ## License
 
