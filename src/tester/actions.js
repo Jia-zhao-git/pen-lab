@@ -108,3 +108,27 @@ export async function runCmd(cmd) {
   await sleep(200)
   return await readText(out, 1)
 }
+
+// ---- grafana.sh 启停（稳定性测试时同步记录设备状态）----
+// grafana.sh 是独立后台进程，每 3 秒采集电池/温度/内存/CPU/进程信息。
+// 启动用 setsid + & 后台（脱离会话，不阻塞 execShell）。
+const GRAFANA_PATH = '/userdisk/grafana.sh'
+
+export function startGrafana() {
+  // 先确保没有残留实例，再启动
+  execShell('pkill -f grafana.sh 2>/dev/null; sleep 0.3; true')
+  execShell('setsid sh ' + shq(GRAFANA_PATH) + ' > /dev/null 2>&1 & true')
+}
+
+export function stopGrafana() {
+  execShell('pkill -f grafana.sh 2>/dev/null; true')
+}
+
+// grafana 是否在运行（通过 pgrep 判断，结果重定向到文件读回）
+export async function grafanaRunning() {
+  const out = joinPath(ensureAppDir(), 'grafana_pid.txt')
+  execShell('pgrep -f grafana.sh > ' + shq(out) + ' 2>/dev/null; true')
+  await sleep(200)
+  const txt = await readText(out, 1)
+  return !!(txt && String(txt).trim())
+}

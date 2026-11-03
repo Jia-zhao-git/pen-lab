@@ -26,7 +26,7 @@
                     <text class="pl-name">{{ r.name }}</text>
                     <text class="pl-ms">{{ r.ms }}ms</text>
                 </div>
-                <div v-if="!r.ok && r.error" class="pl-err">{{ r.error }}</div>
+                <text v-for="(r, ri) in failedResults" :key="'e' + ri" class="pl-err">✗ {{ r.name }}：{{ r.error }}</text>
 
                 <text v-if="!running && !results.length" class="pl-empty">点上方按钮选择测试项</text>
                 <text v-if="running" class="pl-running">测试运行中…</text>
@@ -50,7 +50,8 @@ import { register as registerVoice } from '../../tester/cases/voice.js'
 import { register as registerMonkey } from '../../tester/cases/monkey.js'
 import { APP_VERSION } from '../../lib/appversion.js'
 import { log } from '../../services/platform.js'
-import { goHome } from '../../tester/actions.js'
+import { goHome, stopGrafana } from '../../tester/actions.js'
+import { requestStop } from '../../tester/cases/monkey.js'
 
 export default {
     name: 'index',
@@ -79,6 +80,9 @@ export default {
             const s = this.summary
             if (!s) return {}
             return { backgroundColor: s.fail === 0 ? '#1d2b23' : '#3a1f1f' }
+        },
+        failedResults() {
+            return this.results.filter((r) => !r.ok && r.error)
         }
     },
     mounted() {
@@ -121,7 +125,10 @@ export default {
         },
         stopAll() {
             this.stopFlag = true
-            log('用户请求停止')
+            // 通知 monkey 停止循环，并同步停止 grafana.sh
+            requestStop()
+            stopGrafana()
+            log('用户请求停止，已停止 monkey 和 grafana')
         },
         clearResults() {
             this.results = []
