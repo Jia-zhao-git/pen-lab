@@ -5,7 +5,9 @@
         <div class="pl-top">
             <text class="pl-title">词典笔测试实验室</text>
             <text class="pl-version">v{{ version }}</text>
-            <div class="pl-chip" @click="openChart"><text class="pl-chiptxt">图表</text></div>
+            <div class="pl-chip" @click="openPage('device')"><text class="pl-chiptxt">设备</text></div>
+            <div class="pl-chip" @click="openPage('hwtest')"><text class="pl-chiptxt">硬件</text></div>
+            <div class="pl-chip" @click="openPage('chart')"><text class="pl-chiptxt">图表</text></div>
         </div>
 
         <!-- 测试项菜单：横向一排按钮 -->
@@ -153,8 +155,10 @@ export default {
             this.summary = null
         },
         openChart() {
-            // 跳转到结果可视化页面
             try { $falcon.navTo('chart', {}) } catch (e) { log('navTo chart 失败') }
+        },
+        openPage(page) {
+            try { $falcon.navTo(page, {}) } catch (e) { log('navTo ' + page + ' 失败') }
         }
     }
 }

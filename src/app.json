@@ -1,6 +1,8 @@
 {
   "pages": {
     "index": "pages/index/index.vue",
-    "chart": "pages/chart/chart.vue"
+    "chart": "pages/chart/chart.vue",
+    "device": "pages/device/device.vue",
+    "hwtest": "pages/hwtest/hwtest.vue"
   }
 }
