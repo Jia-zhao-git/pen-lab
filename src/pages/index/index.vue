@@ -82,6 +82,21 @@ export default {
     },
     mounted() {
         log('pen-lab mounted')
+        // 重进 App 时检测是否有测试还在跑（脚本进程存活），有则显示停止按钮
+        this.checkRunning()
+    },
+    async checkRunning() {
+        try {
+            const monkey = await monkeyRunning()
+            const grafana = await grafanaRunning()
+            if (monkey || grafana) {
+                this.running = true
+                this.stopFlag = false
+                this.currentLabel = '稳定性测试'
+                this.statusMsg = '检测到测试仍在运行'
+                log('检测到残留测试进程，显示停止按钮')
+            }
+        } catch (e) { /* 忽略 */ }
     },
     methods: {
         menuClass(m) {
@@ -131,6 +146,11 @@ export default {
         async stopAll() {
             this.stopFlag = true
             stopTest()
+            await sleep(800)
+            const mStopped = !(await monkeyRunning())
+            const gStopped = !(await grafanaRunning())
+            this.running = false
+            this.statusMsg = '已停止：monkey ' + (mStopped ? '✓' : '✗') + ' · grafana ' + (gStopped ? '✓' : '✗')
             log('用户请求停止测试')
         },
         clearResults() {
