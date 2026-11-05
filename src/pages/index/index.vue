@@ -7,22 +7,30 @@
             <text class="pl-version">v{{ version }}</text>
         </div>
 
-        <!-- 测试项：大按钮网格 -->
-        <div class="pl-body">
-            <div class="pl-grid">
-                <div v-for="(m, mi) in menuItems" :key="m.key" :class="menuClass(m)" @click="runMenu(m)">
-                    <text :class="menuTxtClass(m)">{{ m.label }}</text>
+        <!-- 测试项 + 工具入口：可滚动区 -->
+        <scroller class="pl-body" scroll-direction="vertical">
+            <div class="pl-bodyinner">
+                <!-- 测试项：两行大按钮 -->
+                <div class="pl-row">
+                    <div v-for="(m, mi) in menuRow1" :key="m.key" :class="menuClass(m)" @click="runMenu(m)">
+                        <text :class="menuTxtClass(m)">{{ m.label }}</text>
+                    </div>
+                </div>
+                <div class="pl-row">
+                    <div v-for="(m, mi) in menuRow2" :key="m.key" :class="menuClass(m)" @click="runMenu(m)">
+                        <text :class="menuTxtClass(m)">{{ m.label }}</text>
+                    </div>
+                </div>
+
+                <!-- 工具入口 -->
+                <div class="pl-row">
+                    <div class="pl-tool" @click="openPage('device')"><text class="pl-tooltxt">设备</text></div>
+                    <div class="pl-tool" @click="openPage('hwtest')"><text class="pl-tooltxt">硬件</text></div>
+                    <div class="pl-tool" @click="openPage('chart')"><text class="pl-tooltxt">图表</text></div>
+                    <div class="pl-tool" @click="openPage('logs')"><text class="pl-tooltxt">日志</text></div>
                 </div>
             </div>
-
-            <!-- 工具入口：大按钮 -->
-            <div class="pl-tools">
-                <div class="pl-tool" @click="openPage('device')"><text class="pl-tooltxt">设备信息</text></div>
-                <div class="pl-tool" @click="openPage('hwtest')"><text class="pl-tooltxt">硬件测试</text></div>
-                <div class="pl-tool" @click="openPage('chart')"><text class="pl-tooltxt">趋势图表</text></div>
-                <div class="pl-tool" @click="openPage('logs')"><text class="pl-tooltxt">日志查看</text></div>
-            </div>
-        </div>
+        </scroller>
 
         <!-- 底部：状态 + 操作 -->
         <div class="pl-foot">
@@ -61,6 +69,12 @@ export default {
         }
     },
     computed: {
+        menuRow1() {
+            return this.menuItems.slice(0, 4)
+        },
+        menuRow2() {
+            return this.menuItems.slice(4)
+        },
         statusText() {
             if (this.running) return '正在运行：' + this.currentLabel + '（点「停止」结束）'
             return this.statusMsg || '选择上方测试项开始'
@@ -160,67 +174,64 @@ export default {
 
 .pl-body {
     flex: 1;
-    flex-direction: column;
-    padding-left: 16px;
-    padding-right: 16px;
-    padding-top: 14px;
 }
 
-/* 测试项：7 个大按钮，两行排列 */
-.pl-grid {
+.pl-bodyinner {
+    padding-left: 14px;
+    padding-right: 14px;
+    padding-top: 10px;
+    padding-bottom: 8px;
+}
+
+/* 每行按钮 */
+.pl-row {
     flex-direction: row;
-    flex-wrap: wrap;
+    margin-bottom: 8px;
 }
 
+/* 测试项按钮 */
 .pl-item {
     flex-direction: row;
     align-items: center;
     justify-content: center;
-    width: 220px;
-    height: 52px;
+    width: 210px;
+    height: 48px;
     border-radius: 10px;
     background-color: #2f5c8a;
     margin-right: 8px;
-    margin-bottom: 8px;
 }
 
 .pl-item-off {
     flex-direction: row;
     align-items: center;
     justify-content: center;
-    width: 220px;
-    height: 52px;
+    width: 210px;
+    height: 48px;
     border-radius: 10px;
     background-color: #2a2a33;
     margin-right: 8px;
-    margin-bottom: 8px;
 }
 
 .pl-itemtxt {
-    font-size: 17px;
+    font-size: 16px;
     color: #ffffff;
 }
 
 .pl-itemtxt-off {
-    font-size: 17px;
+    font-size: 16px;
     color: #6a6a78;
 }
 
-/* 工具入口：4 个大按钮一排 */
-.pl-tools {
-    flex-direction: row;
-    justify-content: space-between;
-    margin-top: 8px;
-}
-
+/* 工具入口按钮 */
 .pl-tool {
     flex-direction: row;
     align-items: center;
     justify-content: center;
     width: 210px;
-    height: 46px;
+    height: 44px;
     border-radius: 10px;
     background-color: #3a3a46;
+    margin-right: 8px;
 }
 
 .pl-tooltxt {

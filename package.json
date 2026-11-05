@@ -1,6 +1,6 @@
 {
   "name": "pen-lab",
-  "version": "0.1.15",
+  "version": "0.1.17",
   "private": true,
   "description": "词典笔整机测试实验室（HaaS UI / Falcon 小程序）",
   "appid": "8000000000182402",

@@ -62,13 +62,15 @@ const MONKEY_PID = '/userdisk/monkey.pid'
 const GRAFANA_PID = '/userdisk/grafana.pid'
 
 // 启动测试：同时启动 monkey.sh（指定模式）+ grafana.sh
-// mode: ''(混合) | dict | xiaop | ocr | rand | app | 07ocr
+// mode: ''(混合) | dict | xiaop | ocr | rand | app | 07ocr | sleepwake | keys
 export function startTest(mode) {
   // 先清理残留实例（用 pidfile 精确杀）
   killByPidFile(MONKEY_PID)
   killByPidFile(GRAFANA_PID)
   launchDetached('/userdisk/monkey.sh', mode || '', MONKEY_PID)
   launchDetached('/userdisk/grafana.sh', '', GRAFANA_PID)
+  // 稍后返回桌面，让 monkey.sh 在系统层操作，而不是黑掉测试 App 自己
+  execShell('sleep 1; send_event asr press 2>/dev/null; sleep 0.2; send_event asr release 2>/dev/null; true')
 }
 
 // 停止测试：同时停止 monkey.sh + grafana.sh
