@@ -1,5 +1,6 @@
 {
   "pages": {
-    "index": "pages/index/index.vue"
+    "index": "pages/index/index.vue",
+    "chart": "pages/chart/chart.vue"
   }
 }

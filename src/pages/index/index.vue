@@ -5,6 +5,7 @@
         <div class="pl-top">
             <text class="pl-title">词典笔测试实验室</text>
             <text class="pl-version">v{{ version }}</text>
+            <div class="pl-chip" @click="openChart"><text class="pl-chiptxt">图表</text></div>
         </div>
 
         <!-- 测试项菜单：横向一排按钮 -->
@@ -150,6 +151,10 @@ export default {
         clearResults() {
             this.results = []
             this.summary = null
+        },
+        openChart() {
+            // 跳转到结果可视化页面
+            try { $falcon.navTo('chart', {}) } catch (e) { log('navTo chart 失败') }
         }
     }
 }
@@ -182,6 +187,22 @@ export default {
 .pl-version {
     font-size: 13px;
     color: #6a6a78;
+    margin-right: 10px;
+}
+
+.pl-chip {
+    flex-direction: row;
+    align-items: center;
+    height: 26px;
+    padding-left: 12px;
+    padding-right: 12px;
+    border-radius: 6px;
+    background-color: #2f5c8a;
+}
+
+.pl-chiptxt {
+    font-size: 13px;
+    color: #e8e8ee;
 }
 
 .pl-menu {
