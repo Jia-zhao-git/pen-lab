@@ -32,11 +32,10 @@
             </div>
         </scroller>
 
-        <!-- 底部：状态 + 操作 -->
+        <!-- 底部：状态 + 常驻停止按钮 -->
         <div class="pl-foot">
             <text class="pl-status">{{ statusText }}</text>
-            <div v-if="running" class="pl-stop" @click="stopAll"><text class="pl-stoptxt">停止</text></div>
-            <div v-else class="pl-clear" @click="clearResults"><text class="pl-cleartxt">清空</text></div>
+            <div class="pl-stop" @click="stopAll"><text class="pl-stoptxt">停止测试</text></div>
         </div>
 
     </div>
