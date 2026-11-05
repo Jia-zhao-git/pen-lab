@@ -54,7 +54,9 @@ export default {
                 { key: 'dict', label: '点查', mode: 'dict' },
                 { key: 'photo', label: '拍照', mode: 'rand' },
                 { key: 'scan', label: '扫描', mode: 'ocr' },
-                { key: 'voice', label: '语音问答', mode: 'xiaop' }
+                { key: 'voice', label: '语音问答', mode: 'xiaop' },
+                { key: 'sleepwake', label: '休眠唤醒', mode: 'sleepwake' },
+                { key: 'keys', label: '按键专项', mode: 'keys' }
             ]
         }
     },
@@ -164,39 +166,43 @@ export default {
     padding-top: 14px;
 }
 
-/* 测试项：5 个大按钮一排 */
+/* 测试项：7 个大按钮，两行排列 */
 .pl-grid {
     flex-direction: row;
-    justify-content: space-between;
+    flex-wrap: wrap;
 }
 
 .pl-item {
     flex-direction: row;
     align-items: center;
     justify-content: center;
-    width: 170px;
-    height: 64px;
-    border-radius: 12px;
+    width: 220px;
+    height: 52px;
+    border-radius: 10px;
     background-color: #2f5c8a;
+    margin-right: 8px;
+    margin-bottom: 8px;
 }
 
 .pl-item-off {
     flex-direction: row;
     align-items: center;
     justify-content: center;
-    width: 170px;
-    height: 64px;
-    border-radius: 12px;
+    width: 220px;
+    height: 52px;
+    border-radius: 10px;
     background-color: #2a2a33;
+    margin-right: 8px;
+    margin-bottom: 8px;
 }
 
 .pl-itemtxt {
-    font-size: 19px;
+    font-size: 17px;
     color: #ffffff;
 }
 
 .pl-itemtxt-off {
-    font-size: 19px;
+    font-size: 17px;
     color: #6a6a78;
 }
 
@@ -204,7 +210,7 @@ export default {
 .pl-tools {
     flex-direction: row;
     justify-content: space-between;
-    margin-top: 18px;
+    margin-top: 8px;
 }
 
 .pl-tool {
@@ -212,13 +218,13 @@ export default {
     align-items: center;
     justify-content: center;
     width: 210px;
-    height: 54px;
-    border-radius: 12px;
+    height: 46px;
+    border-radius: 10px;
     background-color: #3a3a46;
 }
 
 .pl-tooltxt {
-    font-size: 18px;
+    font-size: 16px;
     color: #d8d8e0;
 }
 
