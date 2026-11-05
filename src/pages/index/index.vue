@@ -8,6 +8,7 @@
             <div class="pl-chip" @click="openPage('device')"><text class="pl-chiptxt">设备</text></div>
             <div class="pl-chip" @click="openPage('hwtest')"><text class="pl-chiptxt">硬件</text></div>
             <div class="pl-chip" @click="openPage('chart')"><text class="pl-chiptxt">图表</text></div>
+            <div class="pl-chip" @click="openPage('logs')"><text class="pl-chiptxt">日志</text></div>
         </div>
 
         <!-- 测试项菜单：横向一排按钮 -->

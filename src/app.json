@@ -3,6 +3,7 @@
     "index": "pages/index/index.vue",
     "chart": "pages/chart/chart.vue",
     "device": "pages/device/device.vue",
-    "hwtest": "pages/hwtest/hwtest.vue"
+    "hwtest": "pages/hwtest/hwtest.vue",
+    "logs": "pages/logs/logs.vue"
   }
 }
